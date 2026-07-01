@@ -286,7 +286,7 @@ export function PickFlow({ orderId }: PickFlowProps) {
           flash && "ring-2 ring-[var(--green)]/40",
         )}
       >
-        <h2 className="text-[28px] font-bold leading-tight text-[#0D1B2E]">
+        <h2 className="text-[28px] font-bold leading-tight text-[var(--bg)]">
           {product.name}
         </h2>
         <p className="font-mono mt-2 text-sm text-gray-500">SKU: {product.sku}</p>
@@ -298,7 +298,7 @@ export function PickFlow({ orderId }: PickFlowProps) {
               <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
                 Απαιτούμενο χρώμα
               </p>
-              <p className="text-xl font-bold text-[#0D1B2E]">{displayColorName}</p>
+              <p className="text-xl font-bold text-[var(--bg)]">{displayColorName}</p>
             </div>
           </div>
         ) : (

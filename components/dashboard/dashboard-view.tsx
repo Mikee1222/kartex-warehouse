@@ -111,7 +111,7 @@ export function DashboardView() {
       title: "Σε Εξέλιξη",
       glow: "glow-bar-blue",
       color: "text-[var(--blue)]",
-      hoverGlow: "hover:shadow-[inset_8px_0_32px_-4px_rgba(59,130,246,0.25)]",
+      hoverGlow: "hover:shadow-[inset_8px_0_32px_-4px_var(--blue-glow)]",
     },
     {
       href: "/ready",

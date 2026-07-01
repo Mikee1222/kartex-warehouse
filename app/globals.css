@@ -11,7 +11,8 @@
   --gold-light: #e8c547;
   --gold-glow: rgba(212, 175, 55, 0.28);
   --green: #00d68f;
-  --blue: #5b8def;
+  --blue: #5a7a9e;
+  --blue-glow: rgba(90, 122, 158, 0.25);
   --red: #ef4444;
   --text: #e8edf5;
   /* WCAG AA on #0A1628 — small nav labels / timestamps */
@@ -107,7 +108,7 @@ textarea {
 }
 
 .glow-bar-blue {
-  box-shadow: inset 8px 0 24px -4px rgba(91, 141, 239, 0.25);
+  box-shadow: inset 8px 0 24px -4px var(--blue-glow);
   border-left: 8px solid var(--blue);
 }
 
