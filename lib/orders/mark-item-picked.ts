@@ -1,9 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 /**
- * Persists pick progress on order_items. Stock deduction stays in pick-stock.ts
- * (sequential: deduct → mark, rollback stock on mark failure). No RPC — variant
- * resolution lives in TypeScript; a single DB transaction would duplicate that logic.
+ * Client-side pick mark when confirm_pick_item RPC is unavailable (pre-migration).
  */
 export async function markOrderItemPicked(
   supabase: SupabaseClient,

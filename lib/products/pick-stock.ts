@@ -6,6 +6,7 @@ import {
   updateVariantStock,
 } from "@/lib/products/color-variants";
 import { logInventoryMovement } from "@/lib/inventory/log-movement";
+import { markOrderItemPicked } from "@/lib/orders/mark-item-picked";
 
 export async function confirmPickItem(
   supabase: SupabaseClient,
@@ -34,8 +35,44 @@ export async function confirmPickItem(
     p_picked_by: user.id,
   });
 
-  if (error) {
-    return { error: error.message };
+  if (!error) {
+    return { error: null };
+  }
+
+  const message = error.message ?? "";
+  if (!/confirm_pick_item|PGRST202|42883/i.test(message)) {
+    return { error: message };
+  }
+
+  const pickInput = {
+    productId: input.productId,
+    colorId: input.colorId,
+    quantity: input.quantity,
+    orderId: input.orderId,
+  };
+
+  const { error: stockError } = await deductStockForPickedItem(
+    supabase,
+    pickInput,
+  );
+  if (stockError) {
+    return { error: stockError };
+  }
+
+  const { error: pickError, alreadyPicked } = await markOrderItemPicked(
+    supabase,
+    input.orderItemId,
+    user.id,
+  );
+
+  if (pickError) {
+    await restoreStockForPickedItem(supabase, pickInput);
+    return { error: pickError };
+  }
+
+  if (alreadyPicked) {
+    await restoreStockForPickedItem(supabase, pickInput);
+    return { error: null };
   }
 
   return { error: null };

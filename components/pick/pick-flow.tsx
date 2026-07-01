@@ -228,6 +228,14 @@ export function PickFlow({ orderId }: PickFlowProps) {
   }
 
   function handleManualConfirm() {
+    if (
+      !currentItem ||
+      confirming ||
+      confirmed.has(currentItem.id) ||
+      currentItem.picked_at
+    ) {
+      return;
+    }
     const qty = Number(manualQty);
     if (!currentItem || !Number.isFinite(qty) || qty !== currentItem.quantity) {
       toast.error(`Εισάγετε ποσότητα ${currentItem?.quantity ?? ""}`);
