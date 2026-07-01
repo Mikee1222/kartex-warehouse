@@ -11,8 +11,11 @@ import { ColorCircle } from "@/components/ui/color-circle";
 import { Spinner } from "@/components/ui/spinner";
 import { ErrorCard } from "@/components/ui/error-card";
 import {
+  derivePickProgress,
   PICK_ORDER_SELECT,
   PICK_ORDER_SELECT_FALLBACK,
+  PICK_ORDER_SELECT_LEGACY,
+  PICK_ORDER_SELECT_NO_PICKED,
 } from "@/lib/orders/pick-queries";
 import { startOrderPicking } from "@/lib/orders/start-picking";
 import {
@@ -20,7 +23,7 @@ import {
   getVariantColorName,
   getVariantHex,
 } from "@/lib/products/color-variants";
-import { deductStockForPickedItem } from "@/lib/products/pick-stock";
+import { confirmPickItem } from "@/lib/products/pick-stock";
 import { createClient } from "@/lib/supabase/client";
 import { inputPremium } from "@/lib/ui/styles";
 import {
@@ -50,6 +53,13 @@ function matchesBarcode(
   );
 }
 
+const PICK_ORDER_SELECTS = [
+  PICK_ORDER_SELECT,
+  PICK_ORDER_SELECT_FALLBACK,
+  PICK_ORDER_SELECT_NO_PICKED,
+  PICK_ORDER_SELECT_LEGACY,
+] as const;
+
 export function PickFlow({ orderId }: PickFlowProps) {
   const [order, setOrder] = useState<OrderPickRow | null>(null);
   const [loading, setLoading] = useState(true);
@@ -73,26 +83,31 @@ export function PickFlow({ orderId }: PickFlowProps) {
     setLoading(true);
     setError(null);
     const supabase = createClient();
-    const primary = await supabase
-      .from("orders")
-      .select(PICK_ORDER_SELECT)
-      .eq("id", orderId)
-      .single();
 
-    let data: OrderPickRow | null = primary.data as OrderPickRow | null;
-    let fetchError = primary.error;
+    let data: OrderPickRow | null = null;
+    let fetchError: { message?: string } | null = null;
 
-    if (
-      fetchError &&
-      /color_id|product_colors/i.test(fetchError.message ?? "")
-    ) {
-      const fallback = await supabase
+    for (const select of PICK_ORDER_SELECTS) {
+      const result = await supabase
         .from("orders")
-        .select(PICK_ORDER_SELECT_FALLBACK)
+        .select(select)
         .eq("id", orderId)
         .single();
-      data = fallback.data as OrderPickRow | null;
-      fetchError = fallback.error;
+
+      if (!result.error) {
+        data = result.data as OrderPickRow;
+        fetchError = null;
+        break;
+      }
+
+      fetchError = result.error;
+      if (
+        !/color_id|product_colors|picked_at|picked_by/i.test(
+          result.error.message ?? "",
+        )
+      ) {
+        break;
+      }
     }
 
     if (fetchError || !data) {
@@ -101,7 +116,13 @@ export function PickFlow({ orderId }: PickFlowProps) {
       return;
     }
 
+    const pickItems = data.order_items?.filter((item) => item.product_id) ?? [];
+    const { confirmed: picked, currentIndex: index } =
+      derivePickProgress(pickItems);
+
     setOrder(data);
+    setConfirmed(picked);
+    setCurrentIndex(index);
     setLoading(false);
   }, [orderId]);
 
@@ -121,6 +142,9 @@ export function PickFlow({ orderId }: PickFlowProps) {
   const progress = items.length
     ? Math.min(confirmed.size, items.length)
     : 0;
+  const stepBadge = allConfirmed
+    ? confirmed.size
+    : Math.min(confirmed.size + 1, items.length);
 
   const itemColor = currentItem ? getOrderItemColor(currentItem) : null;
   const displayColorName =
@@ -156,21 +180,23 @@ export function PickFlow({ orderId }: PickFlowProps) {
   }
 
   async function confirmCurrentItem() {
-    if (!currentItem?.product_id) return;
+    if (!currentItem?.product_id || confirming || confirmed.has(currentItem.id)) {
+      return;
+    }
 
     setConfirming(true);
     const supabase = createClient();
-    const { error: stockError } = await deductStockForPickedItem(supabase, {
+    const { error: pickError } = await confirmPickItem(supabase, {
+      orderItemId: currentItem.id,
       productId: currentItem.product_id,
       colorId: currentItem.color_id,
       quantity: currentItem.quantity,
       orderId,
     });
-
     setConfirming(false);
 
-    if (stockError) {
-      toast.error(stockError);
+    if (pickError) {
+      toast.error(pickError);
       return;
     }
 
@@ -185,7 +211,14 @@ export function PickFlow({ orderId }: PickFlowProps) {
   }
 
   function handleScan(code: string) {
-    if (!product) return;
+    if (
+      !product ||
+      !currentItem ||
+      confirming ||
+      confirmed.has(currentItem.id)
+    ) {
+      return;
+    }
     if (matchesBarcode(product, code)) {
       toast.success("Σωστό barcode!");
       void confirmCurrentItem();
@@ -268,7 +301,7 @@ export function PickFlow({ orderId }: PickFlowProps) {
             {order.order_number}
           </p>
           <span className="rounded-full bg-[var(--orange)]/15 px-3 py-1 text-sm font-bold text-[var(--orange)]">
-            {Math.min(currentIndex + 1, items.length)}/{items.length}
+            {stepBadge}/{items.length}
           </span>
         </div>
         <p className="mt-1 text-base text-[var(--text-muted)]">Είδος σε picking</p>
