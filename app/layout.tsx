@@ -33,8 +33,15 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="el" className={`${inter.variable} h-full`}>
-      <body className={`${inter.className} min-h-dvh bg-kartex-navy text-white antialiased`}>
+    <html
+      lang="el"
+      className={`${inter.variable} h-full`}
+      suppressHydrationWarning
+    >
+      <body
+        className={`${inter.className} min-h-dvh bg-kartex-navy text-white antialiased`}
+        suppressHydrationWarning
+      >
         {children}
         <AppToaster />
       </body>
