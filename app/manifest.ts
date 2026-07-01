@@ -1,0 +1,29 @@
+import type { MetadataRoute } from "next";
+
+export default function manifest(): MetadataRoute.Manifest {
+  return {
+    name: "Kartex Αποθήκη",
+    short_name: "Kartex",
+    description: "Εφαρμογή αποθήκης Kartex",
+    start_url: "/dashboard",
+    display: "standalone",
+    background_color: "#0A1628",
+    theme_color: "#0A1628",
+    orientation: "portrait",
+    lang: "el",
+    icons: [
+      {
+        src: "/icons/icon-192.png",
+        sizes: "192x192",
+        type: "image/png",
+        purpose: "maskable",
+      },
+      {
+        src: "/icons/icon-512.png",
+        sizes: "512x512",
+        type: "image/png",
+        purpose: "maskable",
+      },
+    ],
+  };
+}
