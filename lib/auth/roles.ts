@@ -16,6 +16,16 @@ export function isBootstrapAdminEmail(email: string | undefined) {
   return email?.trim().toLowerCase() === BOOTSTRAP_ADMIN_EMAIL;
 }
 
+export function roleFromBootstrapOrRow(
+  email: string | undefined,
+  role: string | null | undefined,
+): WarehouseRole | null {
+  if (isBootstrapAdminEmail(email)) {
+    return "admin";
+  }
+  return isWarehouseAllowedRole(role) ? role : null;
+}
+
 export async function resolveWarehouseRole(
   supabase: SupabaseClient,
   user: User,
@@ -26,19 +36,5 @@ export async function resolveWarehouseRole(
     .eq("user_id", user.id)
     .maybeSingle();
 
-  const role = data?.role ?? null;
-
-  if (isWarehouseAllowedRole(role)) {
-    return role;
-  }
-
-  if (isBootstrapAdminEmail(user.email)) {
-    return "admin";
-  }
-
-  const metadata = user.user_metadata as Record<string, unknown> | undefined;
-  const metadataRole =
-    typeof metadata?.role === "string" ? metadata.role : null;
-
-  return isWarehouseAllowedRole(metadataRole) ? metadataRole : null;
+  return roleFromBootstrapOrRow(user.email, data?.role ?? null);
 }

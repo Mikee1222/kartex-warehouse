@@ -10,6 +10,7 @@ import { BarcodeScanner } from "@/components/pick/barcode-scanner";
 import { Spinner } from "@/components/ui/spinner";
 import { ErrorCard } from "@/components/ui/error-card";
 import { logInventoryMovement } from "@/lib/inventory/log-movement";
+import { resolveProductDisplayMeta } from "@/lib/products/display-meta";
 import {
   INVENTORY_PRODUCTS_SELECT,
   updateVariantStock,
@@ -50,6 +51,7 @@ export function InventoryView({
   const [deleteConfirm, setDeleteConfirm] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [applyingVariantId, setApplyingVariantId] = useState<string | null>(null);
+  const [applyingProductId, setApplyingProductId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -80,7 +82,22 @@ export function InventoryView({
     const q = query.trim().toLowerCase();
     if (!q) return products;
     return products.filter((p) => {
+      const meta = resolveProductDisplayMeta({
+        id: p.id,
+        name: p.name,
+        clean_name: p.clean_name,
+        sku: p.sku,
+        barcode: p.barcode,
+        stock: p.stock,
+        min_stock: p.min_stock,
+        category: p.category,
+        notes: p.notes,
+        master_id: p.master_id,
+        product_masters: p.product_masters,
+      });
       if (
+        meta.displayName.toLowerCase().includes(q) ||
+        meta.category.toLowerCase().includes(q) ||
         p.name.toLowerCase().includes(q) ||
         p.sku.toLowerCase().includes(q) ||
         (p.barcode?.toLowerCase().includes(q) ?? false)
@@ -175,6 +192,41 @@ export function InventoryView({
     vibrateSuccess();
   }
 
+  async function applyProductStockAdjust(
+    product: InventoryProductRow,
+    delta: number,
+  ) {
+    setApplyingProductId(product.id);
+    const newStock = Math.max(0, product.stock + delta);
+    const supabase = createClient();
+
+    const { error: updateError } = await supabase
+      .from("products")
+      .update({ stock: newStock })
+      .eq("id", product.id);
+
+    setApplyingProductId(null);
+
+    if (updateError) {
+      toast.error("Αποτυχία ενημέρωσης");
+      return;
+    }
+
+    await logInventoryMovement(supabase, {
+      product_id: product.id,
+      type: "adjustment",
+      quantity: Math.abs(delta),
+      reason: delta > 0 ? "Προσθήκη αποθήκης" : "Αφαίρεση αποθήκης",
+    });
+
+    setProducts((prev) =>
+      prev.map((p) => (p.id === product.id ? { ...p, stock: newStock } : p)),
+    );
+
+    toast.success("Απόθεμα ενημερώθηκε");
+    vibrateSuccess();
+  }
+
   async function deleteSelected() {
     if (!selectionCount) return;
     setDeleting(true);
@@ -233,6 +285,11 @@ export function InventoryView({
 
       <h1 className="text-lg font-bold text-[var(--text)]">Απόθεμα</h1>
 
+      <p className="rounded-xl border border-[var(--orange)]/30 bg-[var(--orange)]/10 px-4 py-3 text-sm text-[var(--text-muted)]">
+        Η μαζική διαγραφή προϊόντων είναι επικίνδυνη για χρήση στο πάτωμα —
+        προτείνεται μόνο από το Office. Χρησιμοποιήστε τη μόνο αν είστε σίγουροι.
+      </p>
+
       <div className="relative">
         <input
           type="search"
@@ -275,10 +332,14 @@ export function InventoryView({
             expanded={expanded.has(product.id)}
             isSelected={selected.has(product.id)}
             applyingVariantId={applyingVariantId}
+            applyingProductStock={applyingProductId === product.id}
             onToggleExpand={() => toggleExpand(product.id)}
             onToggleSelect={() => toggleSelect(product.id)}
             onVariantAdjust={(variantId, delta) =>
               void applyVariantAdjust(product, variantId, delta)
+            }
+            onProductStockAdjust={(delta) =>
+              void applyProductStockAdjust(product, delta)
             }
           />
         ))

@@ -1,5 +1,19 @@
 import type { OrderItemRow } from "@/types/orders";
 
+const PICK_PRODUCT_SELECT = `
+  id,
+  name,
+  clean_name,
+  sku,
+  barcode,
+  stock,
+  min_stock,
+  category,
+  notes,
+  master_id,
+  product_masters(clean_name, category, image_url)
+`;
+
 /** Supabase select for warehouse picking (includes line color when migration 020 applied). */
 export const PICK_ORDER_SELECT = `
   id,
@@ -14,7 +28,7 @@ export const PICK_ORDER_SELECT = `
     picked_by,
     color_id,
     product_colors(id, name, hex_code),
-    products(id, name, sku, barcode, stock, min_stock, category, notes)
+    products(${PICK_PRODUCT_SELECT})
   )
 `;
 
@@ -29,7 +43,7 @@ export const PICK_ORDER_SELECT_FALLBACK = `
     quantity,
     picked_at,
     picked_by,
-    products(id, name, sku, barcode, stock, min_stock, category, notes)
+    products(${PICK_PRODUCT_SELECT})
   )
 `;
 
@@ -45,7 +59,7 @@ export const PICK_ORDER_SELECT_NO_PICKED = `
     quantity,
     color_id,
     product_colors(id, name, hex_code),
-    products(id, name, sku, barcode, stock, min_stock, category, notes)
+    products(${PICK_PRODUCT_SELECT})
   )
 `;
 
@@ -58,7 +72,7 @@ export const PICK_ORDER_SELECT_LEGACY = `
     id,
     product_id,
     quantity,
-    products(id, name, sku, barcode, stock, min_stock, category, notes)
+    products(${PICK_PRODUCT_SELECT})
   )
 `;
 

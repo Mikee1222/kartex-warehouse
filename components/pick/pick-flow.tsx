@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
+import { OfflineIndicator } from "@/components/pick/offline-indicator";
 import { BarcodeScanner } from "@/components/pick/barcode-scanner";
 import { BoxPhotosCompletion } from "@/components/pick/box-photos-completion";
 import { ColorCircle } from "@/components/ui/color-circle";
@@ -18,14 +19,22 @@ import {
   PICK_ORDER_SELECT_NO_PICKED,
 } from "@/lib/orders/pick-queries";
 import { startOrderPicking } from "@/lib/orders/start-picking";
+import { resolveProductDisplayMeta } from "@/lib/products/display-meta";
 import {
   findVariantForOrderItem,
   getVariantColorName,
   getVariantHex,
 } from "@/lib/products/color-variants";
 import { confirmPickItem } from "@/lib/products/pick-stock";
+import {
+  dequeuePickConfirm,
+  enqueuePickConfirm,
+  getPendingPickQueue,
+  isBrowserOnline,
+} from "@/lib/pick/offline-pick-queue";
 import { createClient } from "@/lib/supabase/client";
 import { inputPremium } from "@/lib/ui/styles";
+import { ProductThumbnail } from "@/components/ui/product-thumbnail";
 import {
   getCustomerName,
   getOrderItemColor,
@@ -71,8 +80,44 @@ export function PickFlow({ orderId }: PickFlowProps) {
   const [manualQty, setManualQty] = useState("");
   const [showManual, setShowManual] = useState(false);
   const [confirming, setConfirming] = useState(false);
+  const [pendingSync, setPendingSync] = useState<Set<string>>(new Set());
   const [currentVariant, setCurrentVariant] =
     useState<ProductColorVariantRow | null>(null);
+
+  const flushPickQueue = useCallback(async () => {
+    if (!isBrowserOnline()) return;
+
+    const queue = getPendingPickQueue().filter((entry) => entry.orderId === orderId);
+    if (!queue.length) return;
+
+    const supabase = createClient();
+
+    for (const entry of queue) {
+      const { error: pickError } = await confirmPickItem(supabase, {
+        orderItemId: entry.orderItemId,
+        productId: entry.productId,
+        colorId: entry.colorId,
+        quantity: entry.quantity,
+        orderId: entry.orderId,
+      });
+
+      if (pickError) {
+        if (/fetch|network|failed to fetch|offline|timeout/i.test(pickError)) {
+          break;
+        }
+        toast.error(pickError);
+        continue;
+      }
+
+      dequeuePickConfirm(entry.id);
+      setConfirmed((prev) => new Set(prev).add(entry.orderItemId));
+      setPendingSync((prev) => {
+        const next = new Set(prev);
+        next.delete(entry.orderItemId);
+        return next;
+      });
+    }
+  }, [orderId]);
 
   const items = useMemo(
     () => order?.order_items?.filter((i) => i.product_id) ?? [],
@@ -102,7 +147,7 @@ export function PickFlow({ orderId }: PickFlowProps) {
 
       fetchError = result.error;
       if (
-        !/color_id|product_colors|picked_at|picked_by/i.test(
+        !/color_id|product_colors|picked_at|picked_by|product_masters|clean_name|master_id/i.test(
           result.error.message ?? "",
         )
       ) {
@@ -135,9 +180,17 @@ export function PickFlow({ orderId }: PickFlowProps) {
     void startOrderPicking(supabase, orderId);
   }, [orderId]);
 
+  useEffect(() => {
+    void flushPickQueue();
+    const onOnline = () => void flushPickQueue();
+    window.addEventListener("online", onOnline);
+    return () => window.removeEventListener("online", onOnline);
+  }, [flushPickQueue]);
+
   const allConfirmed = items.length > 0 && confirmed.size >= items.length;
   const currentItem = items[currentIndex] as OrderItemRow | undefined;
   const product = getProduct(currentItem?.products ?? null);
+  const productMeta = resolveProductDisplayMeta(product);
   const shelf = getShelfLocation(product);
   const progress = items.length
     ? Math.min(confirmed.size, items.length)
@@ -184,18 +237,47 @@ export function PickFlow({ orderId }: PickFlowProps) {
       return;
     }
 
-    setConfirming(true);
-    const supabase = createClient();
-    const { error: pickError } = await confirmPickItem(supabase, {
+    const pickPayload = {
       orderItemId: currentItem.id,
       productId: currentItem.product_id,
-      colorId: currentItem.color_id,
+      colorId: currentItem.color_id ?? null,
       quantity: currentItem.quantity,
       orderId,
-    });
+    };
+
+    if (!isBrowserOnline()) {
+      enqueuePickConfirm(pickPayload);
+      setPendingSync((prev) => new Set(prev).add(currentItem.id));
+      setConfirmed((prev) => new Set(prev).add(currentItem.id));
+      triggerFlash();
+      toast.message("Αποθηκεύτηκε τοπικά — θα συγχρονιστεί όταν επανέλθει η σύνδεση");
+      setManualQty("");
+      setShowManual(false);
+      if (currentIndex < items.length - 1) {
+        setTimeout(() => setCurrentIndex((i) => i + 1), 520);
+      }
+      return;
+    }
+
+    setConfirming(true);
+    const supabase = createClient();
+    const { error: pickError } = await confirmPickItem(supabase, pickPayload);
     setConfirming(false);
 
     if (pickError) {
+      if (/fetch|network|failed to fetch|offline|timeout/i.test(pickError)) {
+        enqueuePickConfirm(pickPayload);
+        setPendingSync((prev) => new Set(prev).add(currentItem.id));
+        setConfirmed((prev) => new Set(prev).add(currentItem.id));
+        triggerFlash();
+        toast.message("Αποθηκεύτηκε τοπικά — θα συγχρονιστεί όταν επανέλθει η σύνδεση");
+        setManualQty("");
+        setShowManual(false);
+        if (currentIndex < items.length - 1) {
+          setTimeout(() => setCurrentIndex((i) => i + 1), 520);
+        }
+        return;
+      }
       toast.error(pickError);
       return;
     }
@@ -279,6 +361,7 @@ export function PickFlow({ orderId }: PickFlowProps) {
         flash && "flash-green",
       )}
     >
+      <OfflineIndicator />
       {flash ? (
         <div
           className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center"
@@ -312,7 +395,12 @@ export function PickFlow({ orderId }: PickFlowProps) {
             {stepBadge}/{items.length}
           </span>
         </div>
-        <p className="mt-1 text-base text-[var(--text-muted)]">Είδος σε picking</p>
+        <p className="mt-1 text-base text-[var(--text-muted)]">
+          Είδος σε picking
+          {pendingSync.has(currentItem.id) ? (
+            <span className="ml-2 text-[var(--orange)]">(αναμονή συγχρονισμού)</span>
+          ) : null}
+        </p>
         <div className="progress-track mt-3">
           <span
             className="progress-orange block h-full rounded-full transition-all duration-300"
@@ -327,10 +415,25 @@ export function PickFlow({ orderId }: PickFlowProps) {
           flash && "ring-2 ring-[var(--green)]/40",
         )}
       >
-        <h2 className="text-[28px] font-bold leading-tight text-[var(--bg)]">
-          {product.name}
-        </h2>
-        <p className="font-mono mt-2 text-sm text-gray-500">SKU: {product.sku}</p>
+        <div className="flex gap-4">
+          <ProductThumbnail
+            src={productMeta.imageUrl}
+            alt={productMeta.displayName}
+            size={88}
+          />
+          <div className="min-w-0 flex-1">
+            <h2 className="text-[26px] font-bold leading-tight text-[var(--bg)]">
+              {productMeta.displayName}
+            </h2>
+            <span className="mt-2 inline-flex rounded-full bg-[var(--bg)]/10 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-[var(--bg)]/70">
+              {productMeta.category}
+            </span>
+            {productMeta.variantName !== productMeta.displayName ? (
+              <p className="mt-2 text-sm text-gray-600">{productMeta.variantName}</p>
+            ) : null}
+            <p className="font-mono mt-2 text-sm text-gray-500">SKU: {product?.sku}</p>
+          </div>
+        </div>
 
         {displayColorName && displayColorHex ? (
           <div className="mt-6 flex items-center gap-3">

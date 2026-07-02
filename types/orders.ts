@@ -20,15 +20,24 @@ export type ProductColorJoin = {
   hex_code: string;
 };
 
+export type ProductMasterJoin = {
+  clean_name: string;
+  category: string | null;
+  image_url: string | null;
+};
+
 export type ProductJoin = {
   id: string;
   name: string;
+  clean_name?: string | null;
   sku: string;
   barcode: string | null;
   stock: number;
   min_stock: number;
   category: string | null;
   notes: string | null;
+  master_id?: string | null;
+  product_masters?: ProductMasterJoin | ProductMasterJoin[] | null;
 };
 
 export type OrderItemQty = {

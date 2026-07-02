@@ -3,6 +3,7 @@
 import {
   BarChart2,
   Calendar,
+  CheckCircle2,
   Home,
   Package,
   User,
@@ -20,6 +21,7 @@ const NAV_ITEMS: {
 }[] = [
   { href: "/dashboard", label: "Αρχική", icon: Home },
   { href: "/orders", label: "Παραγγελίες", icon: Package },
+  { href: "/ready", label: "Έτοιμα", icon: CheckCircle2 },
   { href: "/schedule", label: "Πρόγραμμα", icon: Calendar },
   { href: "/inventory", label: "Απόθεμα", icon: BarChart2 },
   { href: "/profile", label: "Προφίλ", icon: User },

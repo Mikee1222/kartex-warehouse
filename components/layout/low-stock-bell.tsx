@@ -4,13 +4,25 @@ import { Bell } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { resolveProductDisplayMeta } from "@/lib/products/display-meta";
+import { INVENTORY_PRODUCTS_SELECT } from "@/lib/products/color-variants";
+import { getStockLevel } from "@/lib/products/stock";
 import { createClient } from "@/lib/supabase/client";
-import { isLowStock } from "@/lib/products/stock";
-import type { ProductRow } from "@/types/orders";
+import {
+  getTotalVariantStock,
+  type InventoryProductRow,
+} from "@/types/products";
 import { cn } from "@/lib/utils";
 
+type LowStockItem = {
+  id: string;
+  displayName: string;
+  stock: number;
+  minStock: number;
+};
+
 export function LowStockBell() {
-  const [items, setItems] = useState<ProductRow[]>([]);
+  const [items, setItems] = useState<LowStockItem[]>([]);
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -18,10 +30,35 @@ export function LowStockBell() {
     const supabase = createClient();
     const { data } = await supabase
       .from("products")
-      .select("id, name, sku, stock, min_stock, barcode, category, notes")
+      .select(INVENTORY_PRODUCTS_SELECT)
       .order("stock", { ascending: true });
 
-    const low = ((data as ProductRow[]) ?? []).filter(isLowStock).slice(0, 12);
+    const low = ((data as InventoryProductRow[]) ?? [])
+      .map((product) => {
+        const stock = getTotalVariantStock(product);
+        const meta = resolveProductDisplayMeta({
+          id: product.id,
+          name: product.name,
+          clean_name: product.clean_name,
+          sku: product.sku,
+          barcode: product.barcode,
+          stock: product.stock,
+          min_stock: product.min_stock,
+          category: product.category,
+          notes: product.notes,
+          master_id: product.master_id,
+          product_masters: product.product_masters,
+        });
+        return {
+          id: product.id,
+          displayName: meta.displayName,
+          stock,
+          minStock: product.min_stock,
+        };
+      })
+      .filter((row) => getStockLevel({ stock: row.stock, min_stock: row.minStock }) !== "good")
+      .slice(0, 12);
+
     setItems(low);
   }, []);
 
@@ -82,10 +119,10 @@ export function LowStockBell() {
                     className="block border-b border-white/5 px-4 py-3 transition-colors hover:bg-kartex-card-hover"
                   >
                     <p className="truncate text-sm font-medium text-white">
-                      {p.name}
+                      {p.displayName}
                     </p>
                     <p className="text-xs text-kartex-danger">
-                      {p.stock} / ελάχ. {p.min_stock}
+                      {p.stock} / ελάχ. {p.minStock}
                     </p>
                   </Link>
                 </li>

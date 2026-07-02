@@ -4,6 +4,7 @@ import { pickColorJoin, type ProductColorVariantRow } from "@/types/products";
 
 export const INVENTORY_PRODUCTS_SELECT = `
   *,
+  product_masters ( clean_name, category, image_url ),
   product_color_variants (
     id,
     stock,
