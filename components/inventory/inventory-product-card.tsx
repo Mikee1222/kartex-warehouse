@@ -4,6 +4,7 @@ import { ChevronDown } from "lucide-react";
 
 import { VariantAdjustRow } from "@/components/inventory/variant-adjust-row";
 import { ProductStockAdjustRow } from "@/components/inventory/product-stock-adjust-row";
+import { ColorCircle } from "@/components/ui/color-circle";
 import { ProductThumbnail } from "@/components/ui/product-thumbnail";
 import {
   getStockBarPercent,
@@ -14,6 +15,7 @@ import { resolveProductDisplayMeta } from "@/lib/products/display-meta";
 import { cardPremium } from "@/lib/ui/styles";
 import {
   getActiveVariants,
+  pickColorJoin,
   getTotalVariantStock,
   productUsesVariantStock,
   type InventoryProductRow,
@@ -64,6 +66,9 @@ export function InventoryProductCard({
     master_id: product.master_id,
     product_masters: product.product_masters,
   });
+  const variantColors = variants
+    .map((variant) => pickColorJoin(variant.product_colors))
+    .filter((color): color is NonNullable<typeof color> => Boolean(color));
 
   return (
     <article
@@ -107,9 +112,25 @@ export function InventoryProductCard({
             </p>
           ) : null}
           {hasVariants ? (
-            <p className="mt-1 text-xs text-[var(--text-muted)]">
-              {variants.length} χρώματα
-            </p>
+            <div className="mt-1 flex items-center gap-2">
+              <p className="text-xs text-[var(--text-muted)]">{variants.length} χρώματα</p>
+              <div className="flex items-center -space-x-1.5">
+                {variantColors.slice(0, 5).map((color) => (
+                  <ColorCircle
+                    key={color.id}
+                    hex={color.hex_code ?? "#9CA3AF"}
+                    size={12}
+                    title={color.name}
+                    className="border-black/20"
+                  />
+                ))}
+                {variantColors.length > 5 ? (
+                  <span className="ml-2 text-[10px] text-[var(--text-muted)]">
+                    +{variantColors.length - 5}
+                  </span>
+                ) : null}
+              </div>
+            </div>
           ) : null}
           <div className="mt-2 h-2 overflow-hidden rounded-full bg-[var(--surface-3)]">
             <span

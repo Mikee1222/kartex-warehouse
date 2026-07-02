@@ -43,6 +43,8 @@ export const PICK_ORDER_SELECT_FALLBACK = `
     quantity,
     picked_at,
     picked_by,
+    color_id,
+    product_colors(id, name, hex_code),
     products(${PICK_PRODUCT_SELECT})
   )
 `;

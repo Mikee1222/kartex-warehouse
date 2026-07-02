@@ -205,7 +205,8 @@ export function PickFlow({ orderId }: PickFlowProps) {
     (currentVariant ? getVariantColorName(currentVariant) : null);
   const displayColorHex =
     itemColor?.hex_code ??
-    (currentVariant ? getVariantHex(currentVariant) : null);
+    (currentVariant ? getVariantHex(currentVariant) : null) ??
+    "#9CA3AF";
 
   useEffect(() => {
     if (!currentItem?.product_id) {
@@ -435,19 +436,22 @@ export function PickFlow({ orderId }: PickFlowProps) {
           </div>
         </div>
 
-        {displayColorName && displayColorHex ? (
-          <div className="mt-6 flex items-center gap-3">
-            <ColorCircle hex={displayColorHex} size={40} title={displayColorName} />
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
-                Απαιτούμενο χρώμα
-              </p>
-              <p className="text-xl font-bold text-[var(--bg)]">{displayColorName}</p>
-            </div>
-          </div>
-        ) : (
-          <p className="mt-6 text-sm text-gray-500">Χρώμα: —</p>
-        )}
+        <div className="mt-6 flex items-center gap-2 text-sm text-gray-600">
+          <span className="font-semibold text-gray-500">Χρώμα:</span>
+          {displayColorName ? (
+            <>
+              <ColorCircle
+                hex={displayColorHex}
+                size={14}
+                title={displayColorName}
+                className="border-black/20"
+              />
+              <span className="font-semibold text-[var(--bg)]">{displayColorName}</span>
+            </>
+          ) : (
+            <span>—</span>
+          )}
+        </div>
 
         <p className="mt-8 text-[96px] font-bold leading-none text-[var(--orange)]">
           {currentItem.quantity}
